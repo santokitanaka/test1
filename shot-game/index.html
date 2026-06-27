@@ -136,11 +136,119 @@
         // ─── キーボードの押下状態を管理する ──────────────────────
         const キー = {};
         document.addEventListener('keydown', e => {
+            音声を初期化する();  // 最初のキー操作で音声を有効にする
             キー[e.code] = true;
             // スペースキーでページがスクロールしないようにする
             if (e.code === 'Space') e.preventDefault();
         });
         document.addEventListener('keyup',   e => { キー[e.code] = false; });
+
+        // ─── サウンドシステム（ブラウザの音声機能で音を作る） ────
+        let 音声コンテキスト = null;
+
+        // 最初にユーザーが操作したときだけ音声を有効にする（ブラウザの制限）
+        function 音声を初期化する() {
+            if (!音声コンテキスト) {
+                音声コンテキスト = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (音声コンテキスト.state === 'suspended') {
+                音声コンテキスト.resume();
+            }
+        }
+
+        // レーザー音（弾を撃つとき）：高い音が素早く下がる
+        function 射撃音を鳴らす() {
+            if (!音声コンテキスト) return;
+            const osc  = 音声コンテキスト.createOscillator();
+            const gain = 音声コンテキスト.createGain();
+            osc.connect(gain);
+            gain.connect(音声コンテキスト.destination);
+            osc.type = 'square';
+            osc.frequency.setValueAtTime(900, 音声コンテキスト.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(120, 音声コンテキスト.currentTime + 0.08);
+            gain.gain.setValueAtTime(0.18, 音声コンテキスト.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, 音声コンテキスト.currentTime + 0.08);
+            osc.start();
+            osc.stop(音声コンテキスト.currentTime + 0.08);
+        }
+
+        // 小爆発音（敵を倒したとき）：ノイズを低音フィルターで鈍くする
+        function 爆発音を鳴らす() {
+            if (!音声コンテキスト) return;
+            const サンプル数 = Math.floor(音声コンテキスト.sampleRate * 0.2);
+            const バッファ   = 音声コンテキスト.createBuffer(1, サンプル数, 音声コンテキスト.sampleRate);
+            const データ     = バッファ.getChannelData(0);
+            for (let i = 0; i < サンプル数; i++) データ[i] = Math.random() * 2 - 1;
+            const source = 音声コンテキスト.createBufferSource();
+            source.buffer = バッファ;
+            const filter = 音声コンテキスト.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.value = 600;
+            const gain = 音声コンテキスト.createGain();
+            gain.gain.setValueAtTime(0.5, 音声コンテキスト.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, 音声コンテキスト.currentTime + 0.2);
+            source.connect(filter);
+            filter.connect(gain);
+            gain.connect(音声コンテキスト.destination);
+            source.start();
+        }
+
+        // 大爆発音（自機がやられたとき）：低くて長い
+        function 被弾音を鳴らす() {
+            if (!音声コンテキスト) return;
+            const サンプル数 = Math.floor(音声コンテキスト.sampleRate * 0.5);
+            const バッファ   = 音声コンテキスト.createBuffer(1, サンプル数, 音声コンテキスト.sampleRate);
+            const データ     = バッファ.getChannelData(0);
+            for (let i = 0; i < サンプル数; i++) データ[i] = Math.random() * 2 - 1;
+            const source = 音声コンテキスト.createBufferSource();
+            source.buffer = バッファ;
+            const filter = 音声コンテキスト.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.value = 200;
+            const gain = 音声コンテキスト.createGain();
+            gain.gain.setValueAtTime(1.0, 音声コンテキスト.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, 音声コンテキスト.currentTime + 0.5);
+            source.connect(filter);
+            filter.connect(gain);
+            gain.connect(音声コンテキスト.destination);
+            source.start();
+        }
+
+        // ゲームオーバー音：音が下がっていく4音
+        function ゲームオーバー音を鳴らす() {
+            if (!音声コンテキスト) return;
+            [440, 370, 311, 247].forEach((周波数, i) => {
+                const osc  = 音声コンテキスト.createOscillator();
+                const gain = 音声コンテキスト.createGain();
+                osc.connect(gain);
+                gain.connect(音声コンテキスト.destination);
+                osc.type = 'sawtooth';
+                const 開始 = 音声コンテキスト.currentTime + i * 0.28;
+                osc.frequency.setValueAtTime(周波数, 開始);
+                gain.gain.setValueAtTime(0.3, 開始);
+                gain.gain.exponentialRampToValueAtTime(0.001, 開始 + 0.25);
+                osc.start(開始);
+                osc.stop(開始 + 0.28);
+            });
+        }
+
+        // ステージクリア音：音が上がっていく5音
+        function クリア音を鳴らす() {
+            if (!音声コンテキスト) return;
+            [262, 330, 392, 523, 659].forEach((周波数, i) => {
+                const osc  = 音声コンテキスト.createOscillator();
+                const gain = 音声コンテキスト.createGain();
+                osc.connect(gain);
+                gain.connect(音声コンテキスト.destination);
+                osc.type = 'triangle';
+                const 開始 = 音声コンテキスト.currentTime + i * 0.15;
+                osc.frequency.setValueAtTime(周波数, 開始);
+                gain.gain.setValueAtTime(0.3, 開始);
+                gain.gain.exponentialRampToValueAtTime(0.001, 開始 + 0.2);
+                osc.start(開始);
+                osc.stop(開始 + 0.25);
+            });
+        }
 
         // ─── ゲームの状態をまとめて保持する変数 ─────────────────
         let ゲーム;
@@ -165,6 +273,8 @@
                 敵の弾タイマー: 0,          // 敵が弾を撃つタイミング用
                 ゲームオーバー: false,
                 クリア:         false,
+                ゲームオーバー音済み: false,  // ゲームオーバー音を1回だけ鳴らすためのフラグ
+                クリア音済み:         false,  // クリア音を1回だけ鳴らすためのフラグ
             };
 
             // 4行 × 10列 の敵を並べて配置する
@@ -302,6 +412,7 @@
                     高さ: 14,
                 });
                 ゲーム.自機.弾クールダウン = 20;  // 20フレーム待たないと次は撃てない
+                射撃音を鳴らす();  // レーザー音
             }
 
             // ── 自機の弾を上に移動させ、画面外に出たら削除する ──
@@ -371,6 +482,7 @@
                         // 行によって得点が変わる（上の行ほど高得点）
                         ゲーム.スコア += (敵.種類 + 1) * 10;
                         当たった = true;
+                        爆発音を鳴らす();  // 小爆発音
                         return false;  // この敵を削除する
                     }
                     return true;
@@ -397,6 +509,7 @@
                     コマ:   0,
                     タイマー: 0,
                 });
+                被弾音を鳴らす();  // 大爆発音
                 ゲーム.残機--;
                 if (ゲーム.残機 <= 0) {
                     ゲーム.ゲームオーバー = true;
@@ -409,6 +522,16 @@
             // ── 敵を全員倒したらステージクリア ───────────────────
             if (ゲーム.敵リスト.length === 0) {
                 ゲーム.クリア = true;
+            }
+
+            // ── ゲームオーバー・クリアの音を1回だけ鳴らす ────────
+            if (ゲーム.ゲームオーバー && !ゲーム.ゲームオーバー音済み) {
+                ゲームオーバー音を鳴らす();
+                ゲーム.ゲームオーバー音済み = true;
+            }
+            if (ゲーム.クリア && !ゲーム.クリア音済み) {
+                クリア音を鳴らす();
+                ゲーム.クリア音済み = true;
             }
         }
 
@@ -482,6 +605,7 @@
             // 指が触れたとき → キーを押した状態にする
             btn.addEventListener('touchstart', e => {
                 e.preventDefault();  // スクロールを防ぐ
+                音声を初期化する();  // タッチ操作でも音声を有効にする
                 キー[キーコード] = true;
             }, { passive: false });
             // 指を離したとき → キーを離した状態にする
