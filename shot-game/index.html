@@ -26,10 +26,86 @@
                 height: auto;
             }
         }
+
+        /* ─── タッチ操作ボタンのスタイル ─── */
+        #タッチコントロール {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            max-width: 640px;
+            padding: 12px 24px;
+            box-sizing: border-box;
+            margin-top: 8px;
+        }
+        .移動ボタンエリア {
+            display: flex;
+            gap: 16px;
+        }
+        /* 全ボタン共通のスタイル */
+        .タッチボタン {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            border: 3px solid #32ff32;
+            background: rgba(50, 255, 50, 0.12);
+            color: #32ff32;
+            font-size: 34px;
+            line-height: 1;
+            cursor: pointer;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-tap-highlight-color: transparent; /* タップ時の青枠を消す */
+            touch-action: none; /* スクロールを防ぐ */
+        }
+        .タッチボタン:active {
+            background: rgba(50, 255, 50, 0.40);
+        }
+        /* FIREボタンだけ色を赤にする */
+        #btnFIRE {
+            width: 88px;
+            height: 88px;
+            border-color: #ff3232;
+            background: rgba(255, 50, 50, 0.12);
+            color: #ff3232;
+            font-size: 15px;
+            font-weight: bold;
+            letter-spacing: 1px;
+        }
+        #btnFIRE:active {
+            background: rgba(255, 50, 50, 0.40);
+        }
+        /* リスタートボタン（ゲームオーバー時のみ表示） */
+        #btnリスタート {
+            display: none; /* 最初は隠しておく */
+            padding: 14px 20px;
+            border-radius: 12px;
+            border: 2px solid #ffdc32;
+            background: rgba(255, 220, 50, 0.12);
+            color: #ffdc32;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: none;
+        }
+        #btnリスタート:active {
+            background: rgba(255, 220, 50, 0.40);
+        }
     </style>
 </head>
 <body>
     <canvas id="gameCanvas" width="640" height="540"></canvas>
+
+    <!-- スマホ用タッチコントロールボタン -->
+    <div id="タッチコントロール">
+        <div class="移動ボタンエリア">
+            <button class="タッチボタン" id="btn左">◀</button>
+            <button class="タッチボタン" id="btn右">▶</button>
+        </div>
+        <button id="btnリスタート">RESTART</button>
+        <button class="タッチボタン" id="btnFIRE">FIRE</button>
+    </div>
 
     <script>
         // キャンバスと描画用のコンテキストを取得する
@@ -369,18 +445,22 @@
             if (ゲーム.ゲームオーバー) {
                 ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';  // 半透明の黒で暗くする
                 ctx.fillRect(0, 0, 画面の幅, 画面の高さ);
-                テキスト表示('GAME OVER',                    185, 240, 色.赤,  52);
-                テキスト表示(`SCORE: ${ゲーム.スコア}`,        230, 305, 色.白,  32);
-                テキスト表示('R キーで再スタート',              195, 365, 色.黄,  26);
+                テキスト表示('GAME OVER',             185, 240, 色.赤, 52);
+                テキスト表示(`SCORE: ${ゲーム.スコア}`, 230, 305, 色.白, 32);
+                テキスト表示('R キーで再スタート',       195, 365, 色.黄, 26);
+                // タッチ用のリスタートボタンを表示する
+                document.getElementById('btnリスタート').style.display = 'block';
             }
 
             // ステージクリア画面を表示する
             if (ゲーム.クリア) {
                 ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';  // 半透明の黒で暗くする
                 ctx.fillRect(0, 0, 画面の幅, 画面の高さ);
-                テキスト表示('STAGE CLEAR!',                  160, 240, 色.緑,  52);
-                テキスト表示(`SCORE: ${ゲーム.スコア}`,        230, 305, 色.白,  32);
-                テキスト表示('R キーで再スタート',              195, 365, 色.黄,  26);
+                テキスト表示('STAGE CLEAR!',           160, 240, 色.緑, 52);
+                テキスト表示(`SCORE: ${ゲーム.スコア}`, 230, 305, 色.白, 32);
+                テキスト表示('R キーで再スタート',       195, 365, 色.黄, 26);
+                // タッチ用のリスタートボタンを表示する
+                document.getElementById('btnリスタート').style.display = 'block';
             }
 
             // 操作説明を画面の下に表示する
@@ -391,8 +471,48 @@
         document.addEventListener('keydown', e => {
             if (e.code === 'KeyR' && (ゲーム.ゲームオーバー || ゲーム.クリア)) {
                 ゲームを初期化する();
+                document.getElementById('btnリスタート').style.display = 'none';
             }
         });
+
+        // ─── タッチボタンの設定 ───────────────────────────────────
+        // ボタンを押したときにキーを押した状態にし、離したら戻す
+        function タッチボタンを設定する(ボタンID, キーコード) {
+            const btn = document.getElementById(ボタンID);
+            // 指が触れたとき → キーを押した状態にする
+            btn.addEventListener('touchstart', e => {
+                e.preventDefault();  // スクロールを防ぐ
+                キー[キーコード] = true;
+            }, { passive: false });
+            // 指を離したとき → キーを離した状態にする
+            btn.addEventListener('touchend', e => {
+                e.preventDefault();
+                キー[キーコード] = false;
+            }, { passive: false });
+            // 指が画面外に出たときも同様に離した状態にする
+            btn.addEventListener('touchcancel', () => {
+                キー[キーコード] = false;
+            });
+            // マウスクリックにも対応（パソコンでボタンを押した場合）
+            btn.addEventListener('mousedown', () => { キー[キーコード] = true; });
+            btn.addEventListener('mouseup',   () => { キー[キーコード] = false; });
+            btn.addEventListener('mouseleave',() => { キー[キーコード] = false; });
+        }
+
+        タッチボタンを設定する('btn左',   'ArrowLeft');
+        タッチボタンを設定する('btn右',   'ArrowRight');
+        タッチボタンを設定する('btnFIRE', 'Space');
+
+        // ─── リスタートボタンの設定 ───────────────────────────────
+        const リスタートBtn = document.getElementById('btnリスタート');
+        function リスタートする() {
+            if (ゲーム.ゲームオーバー || ゲーム.クリア) {
+                ゲームを初期化する();
+                リスタートBtn.style.display = 'none';
+            }
+        }
+        リスタートBtn.addEventListener('touchstart', e => { e.preventDefault(); リスタートする(); }, { passive: false });
+        リスタートBtn.addEventListener('click', リスタートする);
 
         // ─── ゲームループ（毎フレーム自動的に呼ばれる） ──────────
         function ゲームループ() {
